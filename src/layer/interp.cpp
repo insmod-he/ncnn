@@ -24,10 +24,6 @@ Interp::Interp()
     one_blob_only = true;
 }
 
-Interp::~Interp()
-{
-}
-
 int Interp::load_param(const ParamDict& pd)
 {
     resize_type = pd.get(0, 0);
@@ -46,6 +42,12 @@ int Interp::forward(const Mat &bottom_blob, Mat &top_blob) const
     int c = bottom_blob.c;
     int oh = output_height;
     int ow = output_width;
+    if (bottom_blob.dims == 1)
+    {
+        h = 1;
+        w = 1;
+        c = bottom_blob.w;
+    }
     if (ow == 0 || ow == 0)
     {
         oh = h * height_scale;
@@ -59,6 +61,18 @@ int Interp::forward(const Mat &bottom_blob, Mat &top_blob) const
     top_blob.create(ow, oh, c);
     if (top_blob.empty())
         return -100;
+
+    if (bottom_blob.dims == 1)
+    {
+        #pragma omp parallel for
+        for (int q = 0; q < c; ++q)
+        {
+            Mat top_blob_c = top_blob.channel(q);
+            const float *ptr = ((const float*)bottom_blob.data + q);
+            top_blob_c.fill(*ptr);
+        }
+        return 0;
+    }
 
     if (resize_type == 1)//nearest
     {
@@ -79,7 +93,7 @@ int Interp::forward(const Mat &bottom_blob, Mat &top_blob) const
         }
         return 0;
 
-        }
+    }
     else if (resize_type == 2)// bilinear
     {
         resize_bilinear(bottom_blob, top_blob, ow, oh);
